@@ -1,0 +1,21 @@
+{
+  "name": "rubik",
+  "version": "1.0.0",
+  "description": "A botkit troll bot that also does other useless things",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/weboide/rubik.git"
+  },
+  "author": "Arnaud Soyez",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/weboide/rubik/issues"
+  },
+  "homepage": "https://github.com/weboide/rubik#readme",
+  "dependencies": {
+    "botkit": "^0.4.0",
+    "cron": "^1.1.1",
+    "scrambo": "^0.3.0"
+  }
+}
