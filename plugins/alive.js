@@ -1,3 +1,7 @@
+function isNumeric(n) {
+	  return !isNaN(parseFloat(n)) && isFinite(n);
+}
+
 
 exports.isalive = function(url, cb) {
 	var http = require('http');
@@ -18,8 +22,15 @@ exports.init = function(controller) {
 	    'direct_message,direct_mention,mention', function(bot, message) {
 		var url = message.match[1].match(/([^\|\>]+)/);
 		exports.isalive(url[1], function(status){ 
-			bot.reply(message,
-			    'The URL *'+url[1].replace('<','')+'* returned: '+ status);
+			console.log(status);
+			if(isNumeric(status) && (status.toString().startsWith(2) || status.toString().startsWith(3))) {
+				bot.reply(message,
+				    'The URL *'+url[1].replace('<','')+'* seems to be working. It returned: '+ status);
+			}
+			else {
+				bot.reply(message,
+				    'The URL *'+url[1].replace('<','')+'* may not be working. It returned: '+ status);
+			}
 		});
 	    });
 }
