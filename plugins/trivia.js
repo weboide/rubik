@@ -86,7 +86,7 @@ exports.nextQuestion = function(bot, trivia, delay) {
 			choices.push(question.correct_answer)
 			bot.say({'text': 
 				    ':interrobang: *'+question.question+'* :interrobang:\n' + 
-				    '> Answers: ' + shuffle(choices).join(', '),
+				    '> *Pick an answer:* \n> ' + shuffle(choices).join('\n> '),
 				'channel': trivia.channel
 			})
 			trivia.question_active = true;
