@@ -16,14 +16,29 @@ if (!process.env.token) {
 
 var Botkit = require('botkit');
 var os = require('os');
+var YAML = require('yamljs')
+var homedir = process.env[(process.platform == 'win32') ? 'USERPROFILE' : 'HOME']
+var fs = require('fs')
 
 var controller = Botkit.slackbot({
     debug: true,
 });
 
-require('./plugins/cubes').init(controller)
-require('./plugins/alive').init(controller)
-require('./plugins/trivia').init(controller)
+// Read configuration file
+var conf = {}
+var conffile = homedir + '/.rubik.yml';
+try {
+	conf = YAML.load(conffile)
+} catch(e) {
+
+}
+
+
+// Initialize all plugins
+require('./plugins/cubes').init(controller, conf)
+require('./plugins/alive').init(controller, conf)
+require('./plugins/trivia').init(controller, conf)
+require('./plugins/troll').init(controller, conf)
 
 var bot = controller.spawn({
     token: process.env.token

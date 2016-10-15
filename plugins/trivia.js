@@ -1,5 +1,12 @@
 var trivias = {}
+var http = require('http')
+var Entities = require('html-entities').AllHtmlEntities;
+var entities = new Entities
 exports.answertime = 30
+
+function replaceAt(str, index, character) {
+	    return str.substr(0, index) + character + str.substr(index+character.length);
+}
 
 function shuffle(array) {
   var currentIndex = array.length, temporaryValue, randomIndex;
@@ -20,22 +27,28 @@ function shuffle(array) {
   return array;
 }
 
+function normalizeAnswer(s, lowercase) {
+	var t = s.replace(/\s+/g, " ").trim()
+	if(lowercase)
+		return t.toLowerCase()
+	else
+		return t
+}
+
 function isNumeric(n) {
-	  return !isNaN(parseFloat(n)) && isFinite(n);
+	return !isNaN(parseFloat(n)) && isFinite(n);
 }
 exports.newQuestion = function(callback) {
-    var http = require('http')
-    var Entities = require('html-entities').AllHtmlEntities;
-    var entities = new Entities
 
     processcb = function(response) {
 	var questions = response.results
 	for (var i = 0, len = questions.length; i < len; i++) {
         	questions[i].question = entities.decode(questions[i].question)
-	        questions[i].correct_answer = entities.decode(questions[i].correct_answer)
-	        questions[i].answer = questions[i].correct_answer.toLowerCase().replace(/\s+$/g, " ")
+	        questions[i].correct_answer = normalizeAnswer(entities.decode(questions[i].correct_answer))
+	        questions[i].answer = questions[i].correct_answer.toLowerCase()
+		questions[i].hint = questions[i].answer.replace(/[a-z0-9]/gi, '_')
 		for(var j in questions[i].incorrect_answers) {
-			questions[i].incorrect_answers[j] = entities.decode(questions[i].incorrect_answers[j])
+			questions[i].incorrect_answers[j] = normalizeAnswer(entities.decode(questions[i].incorrect_answers[j]))
 		}
 	}
         callback(questions)
@@ -51,8 +64,8 @@ exports.startGame = function(bot, channel) {
 
     if(!(channel in trivias)) {
 	    bot.say({ 'text': 
-		    ':star: A Trivia game has started! :star:\n' +
-		    '> :warning: You will have *' + exports.answertime + '* seconds to answer the question. ' +
+		    ':star: A Trivia game has started in <!here|here>! :star:\n' +
+		    '> :warning: You will have *' + exports.answertime + '* seconds to answer each question. ' +
 		    'Just type your answers in this channel, no need to *@rubik*!',
 		    'channel': channel})
 	    exports.newQuestion(function(questions) {
@@ -65,11 +78,38 @@ exports.startGame = function(bot, channel) {
 	    		'question_active': false
 		}
 		trivias[channel] = trivia;
-		exports.nextQuestion(bot, trivia)
+		exports.nextQuestion(bot, trivia, 10)
 	    });
     }
     else
 	    console.log('Can\'t start new game, one is already running for channel: '+channel)
+}
+
+exports.showHint = function(bot, trivia, returnStr) {
+	var question = trivia.current_question
+	var hintcount = question.hintcount
+	if(hintcount > 0) {
+		// If less than 10 letters, then show only 1 letter per hint, if less than 20, show 2, etc.
+		for(var x = 0; x < Math.ceil(question.hint.length/10); x++) {
+			var pos_ = [];
+			for(var i=0; i<question.hint.length;i++) {
+				    if (question.hint[i] === '_') pos_.push(i);
+			}
+			
+			if(pos_.length) {
+				var next_ = pos_[Math.floor(Math.random()*pos_.length)]
+				question.hint = replaceAt(question.hint, next_, question.correct_answer.charAt(next_))
+			}
+		}
+	}
+	
+	question.hintcount++;
+	var msg = '> *Hint:* `' + question.hint + '` (' + question.correct_answer.length + ' letters)'
+	if(returnStr)
+		return msg
+	else
+		bot.say({'text': msg, 'channel': trivia.channel})
+	
 }
 
 exports.nextQuestion = function(bot, trivia, delay) {
@@ -78,19 +118,22 @@ exports.nextQuestion = function(bot, trivia, delay) {
 	}
 	var question = trivia.remaining_questions.pop()
 	if(question) {
+		// set the hint count to 0
+		question.hintcount = 0
 		if(delay) {
-			bot.say({'text':'Next question in '+delay+' seconds...', 'channel': trivia.channel})
+			bot.say({'text':'_Next question in *'+delay+' seconds...*_', 'channel': trivia.channel})
 		}
 		setTimeout(function(){
 			var choices = question.incorrect_answers;
 			choices.push(question.correct_answer)
-			bot.say({'text': 
-				    ':interrobang: *'+question.question+'* :interrobang:\n' + 
-				    '> *Pick an answer:* \n> ' + shuffle(choices).join('\n> '),
-				'channel': trivia.channel
-			})
-			trivia.question_active = true;
+			var msg = ':interrobang: *'+question.question+'* :interrobang:\n' 
 			trivia.current_question = question
+			if(question.type == 'boolean')
+				msg += '> Answer with *True* or *False*'
+			else
+				msg += exports.showHint(bot, trivia, true) + '\n> Type *hint* to get a hint!'
+			bot.say({'text': msg, 'channel': trivia.channel})
+			trivia.question_active = true;
 
 			trivia.timer = setTimeout(function() {
 				exports.endQuestion(bot, trivia)
@@ -130,7 +173,7 @@ exports.endQuestion = function(bot, trivia) {
 	    var old_question = trivia.current_question
 	    trivia.question_active = false
 	    trivia.current_question = null
-	    var msg = 'The answer was *' + old_question.answer + '*. Duh!';
+	    var msg = 'The answer was *' + old_question.correct_answer + '*. Duh!';
             if(!old_question.winner_message) {
 		    msg = 'Nobody guessed right! ' + msg;
 	    }
@@ -140,7 +183,7 @@ exports.endQuestion = function(bot, trivia) {
 
 	    bot.say({'text': msg, 'channel': trivia.channel});
 
-	    exports.nextQuestion(bot, trivia, 5)
+	    exports.nextQuestion(bot, trivia, 10)
     }
     else
 	    console.log('Tried to end the question, but it was already over')
@@ -170,12 +213,19 @@ exports.init = function(controller) {
 	controller.on('direct_message,direct_mention,mention,ambient', function(bot, message) {
 		if(message.channel in trivias) {
 			var trivia = trivias[message.channel]
-			console.log(trivia)
-		        console.log(message.text)
-			if (trivia.question_active && message.text.toLowerCase() == trivia.current_question.answer) {
-				exports.foundWinner(bot, message, trivia)
+			if (trivia.question_active) {
+				var cleantext = normalizeAnswer(message.text, true)
+				var cleananswer = normalizeAnswer(trivia.current_question.answer, true)
+				console.log(trivia)
+				console.log('Received: "' + message.text + '"  ==>  "' + cleantext + '"')
+			       
+				if(cleantext == cleananswer) {
+					exports.foundWinner(bot, message, trivia)
+				}
+				if (message.text == 'hint') {
+					exports.showHint(bot, trivia)
+				}
 			}
-
 		}
 	});
 }
