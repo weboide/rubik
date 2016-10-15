@@ -65,7 +65,7 @@ exports.startGame = function(bot, channel) {
     if(!(channel in trivias)) {
 	    bot.say({ 'text': 
 		    ':star: A Trivia game has started in <!here|here>! :star:\n' +
-		    '> :warning: You will have *' + exports.answertime + '* seconds to answer each question. ' +
+		    ':warning: You will have *' + exports.answertime + '* seconds to answer each question. ' +
 		    'Just type your answers in this channel, no need to *@rubik*!',
 		    'channel': channel})
 	    exports.newQuestion(function(questions) {
@@ -131,7 +131,7 @@ exports.nextQuestion = function(bot, trivia, delay) {
 			if(question.type == 'boolean')
 				msg += '> Answer with *True* or *False*'
 			else
-				msg += exports.showHint(bot, trivia, true) + '\n> Type *hint* to get a hint!'
+				msg += exports.showHint(bot, trivia, true) + '\n> Type *hint* to get another hint!'
 			bot.say({'text': msg, 'channel': trivia.channel})
 			trivia.question_active = true;
 
@@ -173,12 +173,12 @@ exports.endQuestion = function(bot, trivia) {
 	    var old_question = trivia.current_question
 	    trivia.question_active = false
 	    trivia.current_question = null
-	    var msg = 'The answer was *' + old_question.correct_answer + '*. Duh!';
+	    var msg = '';
             if(!old_question.winner_message) {
-		    msg = 'Nobody guessed right! ' + msg;
+		    msg = 'Nobody guessed right! The answer was *' + old_question.correct_answer + '*. Duh!';
 	    }
 	    else {
-		    msg = ':medal: *Bravo <@' + old_question.winner_message.user + '>* :medal: You got the right answer!\n' + msg;
+		    msg = ':medal: *Bravo <@' + old_question.winner_message.user + '>* :medal: You got the right answer: *' + old_question.correct_answer + '* :beer: ';
 	    }
 
 	    bot.say({'text': msg, 'channel': trivia.channel});
