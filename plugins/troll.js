@@ -1,4 +1,5 @@
 var lastmicrosoft = 0;
+var http = require('http');
 
 function timestamp() {
 	return Math.floor(Date.now() / 1000)
@@ -36,4 +37,27 @@ exports.init = function(controller) {
 		}
 	    });
 
+
+	controller.hears(['(find|give|send|need|had|have).*excuses?', 'why.*(doesn\'t|does not|isn\'t|is not|cannot|can\'t).*(work|function|stay up)','why.*bad', 'why.*(keep|always).*crashing'], 'direct_message,direct_mention,mention', function(bot, message) {
+		var request = http.request({
+			host: 'www.codingexcuses.com',
+	    		headers: {'Accept': 'application/json'}
+		}, function(res) {
+			var body = '';
+			res.setEncoding('utf8');
+			res.on('data', function (d) {
+				body += d;
+			});
+			res.on('end', function () {
+				var j = JSON.parse(body);
+				bot.reply(message, '<@'+message.user+'> '+j.excuse);
+			});
+			res.on('error', function (e) {
+				bot.reply(message, 'Sorry <@'+message.user+'>, I couldn\'t find an excuse for you due to: '+e.message);
+			});
+		});
+		request.end();
+		console.log('Request for excuse sent!');
+
+	});
 }

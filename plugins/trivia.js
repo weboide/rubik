@@ -1,7 +1,37 @@
 var trivias = {}
 var http = require('http')
+var https = require('https')
 var Entities = require('html-entities').AllHtmlEntities;
 var entities = new Entities
+var api = 'https://opentdb.com/api.php';
+var categories = {
+	"any":"Any Category",
+	"9":"General Knowledge",
+	"10":"Entertainment: Books",
+	"11":"Entertainment: Film",
+	"12":"Entertainment: Music",
+	"13":"Entertainment: Musicals &amp; Theatres",
+	"14":"Entertainment: Television",
+	"15":"Entertainment: Video Games",
+	"16":"Entertainment: Board Games",
+	"17":"Science &amp; Nature",
+	"18":"Science: Computers",
+	"19":"Science: Mathematics",
+	"20":"Mythology",
+	"21":"Sports",
+	"22":"Geography",
+	"23":"History",
+	"24":"Politics",
+	"25":"Art",
+	"26":"Celebrities",
+	"27":"Animals",
+	"28":"Vehicles",
+	"29":"Entertainment: Comics",
+	"30":"Science: Gadgets",
+	"31":"Entertainment: Japanese Anime &amp; Manga",
+	"32":"Entertainment: Cartoon &amp; Animations"
+}
+exports.votesToAnsers = 3
 exports.answertime = 30
 
 function replaceAt(str, index, character) {
@@ -38,7 +68,7 @@ function normalizeAnswer(s, lowercase) {
 function isNumeric(n) {
 	return !isNaN(parseFloat(n)) && isFinite(n);
 }
-exports.newQuestion = function(callback) {
+exports.newQuestion = function(topic, callback) {
 
     processcb = function(response) {
 	var questions = response.results
@@ -53,23 +83,32 @@ exports.newQuestion = function(callback) {
 	}
         callback(questions)
     }
-    http.get('http://opentdb.com/api.php?amount=5', function(res) {
+    var url = api + '?amount=5&type=multiple';
+    if(topic != 'any') {
+	url += '&category='+encodeURIComponent(topic)
+    }
+    console.log('Calling Trivia API: '+url)
+    https.get(url, function(res) {
         res.on('data', function(chunk) {
+	    console.log('Received: '+chunk.toString())
             processcb(JSON.parse(chunk.toString()))
 	});
     });
 }
 
-exports.startGame = function(bot, channel) {
-
+exports.startGame = function(bot, channel, topic) {
     if(!(channel in trivias)) {
+	    if(!(topic in categories)) {
+		topic = 'any';
+	    }
 	    bot.say({ 'text': 
-		    ':star: A Trivia game has started in <!here|here>! :star:\n' +
+		    ':star: A Trivia game has started in <!here|here>! Topic: *' + categories[topic] + '*:star:\n' +
 		    ':warning: You will have *' + exports.answertime + '* seconds to answer each question. ' +
 		    'Just type your answers in this channel, no need to *@rubik*!',
 		    'channel': channel})
-	    exports.newQuestion(function(questions) {
+	    exports.newQuestion(topic, function(questions) {
 		var trivia = {
+			'topic': topic,
 			'channel': channel,
 			'questions': questions, 
 	    		'remaining_questions': questions,
@@ -85,6 +124,19 @@ exports.startGame = function(bot, channel) {
 	    console.log('Can\'t start new game, one is already running for channel: '+channel)
 }
 
+exports.showPossibleAnswers = function(bot, trivia, returnStr) {
+	var question = trivia.current_question
+	var choices = question.incorrect_answers.slice(0); // Copy object
+	choices.push(question.correct_answer)
+		
+	var s = 'The possible answers are: \n> '+shuffle(choices).join('\n> ');
+
+	if(returnStr)
+		return s
+	else
+		bot.say({'text': s, 'channel': trivia.channel})
+}
+
 exports.showHint = function(bot, trivia, returnStr) {
 	var question = trivia.current_question
 	var hintcount = question.hintcount
@@ -96,7 +148,7 @@ exports.showHint = function(bot, trivia, returnStr) {
 				    if (question.hint[i] === '_') pos_.push(i);
 			}
 			
-			if(pos_.length) {
+			if(pos_.length > 1) {
 				var next_ = pos_[Math.floor(Math.random()*pos_.length)]
 				question.hint = replaceAt(question.hint, next_, question.correct_answer.charAt(next_))
 			}
@@ -124,14 +176,14 @@ exports.nextQuestion = function(bot, trivia, delay) {
 			bot.say({'text':'_Next question in *'+delay+' seconds...*_', 'channel': trivia.channel})
 		}
 		setTimeout(function(){
-			var choices = question.incorrect_answers;
+			var choices = question.incorrect_answers.slice(0); // copy object
 			choices.push(question.correct_answer)
 			var msg = ':interrobang: *'+question.question+'* :interrobang:\n' 
 			trivia.current_question = question
 			if(question.type == 'boolean')
 				msg += '> Answer with *True* or *False*'
 			else
-				msg += exports.showHint(bot, trivia, true) + '\n> Type *hint* to get another hint!'
+				msg += exports.showHint(bot, trivia, true) + '\n> Type *hint* to get another hint, or *answers* to vote to show the possible answers ('+exports.votesToAnsers+' votes needed)!'
 			bot.say({'text': msg, 'channel': trivia.channel})
 			trivia.question_active = true;
 
@@ -205,9 +257,18 @@ exports.endGame = function(bot, trivia) {
 
 exports.init = function(controller) {
 
-	controller.hears(['trivia'],
+	controller.hears(['trivia categories'],
 	    'direct_message,direct_mention,mention', function(bot, message) {
-		    exports.startGame(bot, message.channel)
+		    var msg = 'Here are the trivia categories: \n'
+		    for(var k in categories) {
+			msg += k + ': ' + categories[k] + '\n'
+		    }
+
+		    bot.reply(message, msg);
+    })
+	controller.hears(['trivia ?([a-z0-9]*)'],
+	    'direct_message,direct_mention,mention', function(bot, message) {
+		    exports.startGame(bot, message.channel, message.match[1])
     })
 
 	controller.on('direct_message,direct_mention,mention,ambient', function(bot, message) {
@@ -222,10 +283,24 @@ exports.init = function(controller) {
 				if(cleantext == cleananswer) {
 					exports.foundWinner(bot, message, trivia)
 				}
-				if (message.text == 'hint') {
+				if (cleantext == 'hint') {
 					exports.showHint(bot, trivia)
+				}
+				if (cleantext == 'answers' || cleantext == 'answer' || cleantext == 'choices') {
+					if(!trivia.current_question.answers_votes) {
+						trivia.current_question.answers_votes = {}
+					}
+					trivia.current_question.answers_votes[message.user] = 1
+					var votes = Object.keys(trivia.current_question.answers_votes).length
+					if(votes < exports.votesToAnsers) {
+						bot.reply(message, 'I need '+(exports.votesToAnsers-votes)+' more votes to show the possible answers!')
+					}
+					else {
+						exports.showPossibleAnswers(bot, trivia)
+					}
 				}
 			}
 		}
 	});
+
 }

@@ -1,24 +1,47 @@
 function isNumeric(n) {
-	  return !isNaN(parseFloat(n)) && isFinite(n);
+	  return !isNaN(parseFloat(n)) && isFinite(n)
 }
 
 
 exports.isalive = function(url, cb) {
-	var http = require('http');
+	var http = require('http')
 
-	if(!url.startsWith('http://')) {
-		url = 'http://' + url;
+	if(!url.startsWith('http')) {
+		url = 'http://' + url
+	}
+	if(url.startsWith('https')) {
+		http = require('https')
 	}
 	http.get(url, function(res) {
-		cb(res.statusCode);
+		var status = res.statusCode
+		if(isNumeric(status) && (status.toString().startsWith(2) || status.toString().startsWith(3))) {
+			cb(true, 'The URL '+url+' *seems to be working* :white_check_mark: Returned Status: *'+status+'*')
+		}
+		else {
+			cb(false, 'The URL '+url+' *doesn\'t seem accessible* :sos: Returned Status: *'+status+'*')
+		}
 	}).on('error', function(e) {
-		cb(e.message)
+		cb(false, 'I could not get to the URL *'+url+'*. :kaboom: Error: *'+e.message+'*')
 	});
 }
 
-exports.init = function(controller) {
+exports.init = function(controller, config) {
 
-	controller.hears(['is <?([^ ]+) alive'],
+	if(config.alive) {
+		for(var i in config.alive) {
+			controller.hears(['is '+i+' (alive|working|online|offline|dead)'],
+			    'direct_message,direct_mention,mention', function(bot, message) {
+				var cb = function(success, txt) {
+					bot.reply(message, txt);
+				}
+				for(j in config.alive[i]){
+					exports.isalive(config.alive[i][j], cb);
+				}
+			});
+		}
+	}
+
+	controller.hears(['is <?([^ ]+) (alive|working|online|offline|dead)'],
 	    'direct_message,direct_mention,mention', function(bot, message) {
 		var url = message.match[1].match(/([^\|\>]+)/);
 		if(url[1].startsWith('@U')) {
@@ -26,17 +49,9 @@ exports.init = function(controller) {
 
 		}
 		else {
-			exports.isalive(url[1], function(status){ 
-				console.log(status);
-				if(isNumeric(status) && (status.toString().startsWith(2) || status.toString().startsWith(3))) {
-					bot.reply(message,
-					    'The URL *'+url[1].replace('<','')+'* seems to be working. It returned: '+ status);
-				}
-				else {
-					bot.reply(message,
-					    'The URL *'+url[1].replace('<','')+'* may not be working. It returned: '+ status);
-				}
-			});
+			exports.isalive(url[1], function(success, txt){
+				bot.reply(message, txt);
+			})
 		}
 	    });
 }

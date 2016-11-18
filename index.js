@@ -33,12 +33,13 @@ try {
 
 }
 
-
+console.log(conf)
 // Initialize all plugins
 require('./plugins/cubes').init(controller, conf)
 require('./plugins/alive').init(controller, conf)
 require('./plugins/trivia').init(controller, conf)
 require('./plugins/troll').init(controller, conf)
+require('./plugins/search').init(controller, conf)
 
 var bot = controller.spawn({
     token: process.env.token
@@ -190,6 +191,10 @@ controller.hears(['uptime', 'identify yourself', 'who are you', 'what is your na
              '>. I have been running for ' + uptime + ' on my virtual treadmill :troll:.');
 
     });
+
+controller.hears(['leave'], 'direct_mention', function(bot, message) {
+	bot.reply(message, ':sob: I can\'t leave, you have to /kick me :troll:');
+});
 
 function formatUptime(uptime) {
     var unit = 'second';
